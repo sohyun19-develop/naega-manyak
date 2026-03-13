@@ -1254,14 +1254,22 @@ async function callClaudeAPI(stock) {
   if (start === -1 || end === -1) throw new Error('분석 결과를 찾을 수 없어요. 다시 시도해주세요.');
 
   let jsonStr = textContent.slice(start, end + 1);
-  // 줄바꿈/탭 제거해서 파싱 오류 방지
-  jsonStr = jsonStr.replace(/[\r\n\t]/g, ' ');
+  jsonStr = jsonStr.replace(/[\r\n\t]/g, ' ').replace(/[\x00-\x1F\x7F]/g, ' ');
 
   try {
     return JSON.parse(jsonStr);
   } catch (e) {
-    const cleaned = jsonStr.replace(/[\x00-\x1F\x7F]/g, ' ');
-    return JSON.parse(cleaned);
+    try {
+      const fixed = jsonStr.replace(/:(\s*)"((?:[^"\\]|\\.)*)"/g, (m, sp, v) => {
+        return `:${sp}"${v.replace(/(?<!\\)"/g, '\u0022')}"`;
+      });
+      return JSON.parse(fixed);
+    } catch (e2) {
+      const lastTry = jsonStr.replace(/:\s*"([^"]*)"/g, (m, v) => {
+        return `: "${v.replace(/['"]/g, '')}"`;
+      });
+      return JSON.parse(lastTry);
+    }
   }
 }
 
