@@ -1215,16 +1215,27 @@ async function callClaudeAPI(stock) {
     : `오늘은 ${today}입니다. ${stock.name}(${stock.code})의 오늘 주가 변동 원인을 뉴스와 시장 동향을 검색해서 분석해주세요.`;
   const prompt = `당신은 주식 분석 전문가입니다. ${priceInfo}
 
-반드시 아래 규칙을 지켜서 JSON만 반환하세요:
-- JSON 외 다른 텍스트 절대 금지 (마크다운 코드블록도 금지)
-- 모든 문자열 값에 큰따옴표(") 사용 금지. 작은따옴표도 금지. 따옴표가 필요하면 〈〉기호 사용
-- 줄바꿈 문자 금지. 한 문장은 반드시 한 줄로
-- 숫자값(shortRisk, momentum, fundamental)은 0~100 사이 정수만
-- 모든 텍스트는 반드시 자연스러운 한국어 띄어쓰기를 포함할 것. 절대 단어를 붙여쓰지 말 것
+아래 XML 형식으로만 반환하세요. XML 외 다른 텍스트 절대 금지.
+모든 텍스트는 자연스러운 한국어 띄어쓰기를 포함할 것.
+shortRisk, momentum, fundamental은 0~100 사이 정수.
 
-{"summary":"20자이내핵심요약","factors":[{"category":"트리거","color":"red","text":"직접원인","detail":"초보자설명1-2문장"},{"category":"매크로","color":"yellow","text":"글로벌자금흐름","detail":"설명"},{"category":"수급","color":"blue","text":"외국인기관포지션","detail":"설명"},{"category":"섹터","color":"yellow","text":"섹터요인","detail":"설명"}],"signals":{"shortRisk":65,"momentum":40,"fundamental":70},"watchPoints":["포인트1","포인트2"],"levelSimple":"초등학생설명2문장비유포함"}
-
-위 형식 그대로, 실제 분석 내용으로 채워서 반환하세요.`;
+<r>
+<summary>20자이내핵심요약</summary>
+<factors>
+<factor><category>트리거</category><color>red</color><text>직접원인10자이내</text><detail>초보자설명1-2문장</detail></factor>
+<factor><category>매크로</category><color>yellow</color><text>글로벌환경10자이내</text><detail>설명1-2문장</detail></factor>
+<factor><category>수급</category><color>blue</color><text>외국인기관포지션</text><detail>설명1-2문장</detail></factor>
+<factor><category>섹터</category><color>yellow</color><text>섹터요인</text><detail>설명1-2문장</detail></factor>
+</factors>
+<shortRisk>65</shortRisk>
+<momentum>40</momentum>
+<fundamental>70</fundamental>
+<watchPoints>
+<point>다음에 체크할 포인트1</point>
+<point>다음에 체크할 포인트2</point>
+</watchPoints>
+<levelSimple>초등학생도 이해하는 2문장 비유 포함 설명</levelSimple>
+</r>`;
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -1253,28 +1264,32 @@ async function callClaudeAPI(stock) {
   const data = await response.json();
   const textContent = data.content.filter(c => c.type === 'text').map(c => c.text).join('');
 
-  const start = textContent.indexOf('{');
-  const end = textContent.lastIndexOf('}');
-  if (start === -1 || end === -1) throw new Error('분석 결과를 찾을 수 없어요. 다시 시도해주세요.');
+  const xmlStart = textContent.indexOf('<r>');
+  const xmlEnd = textContent.indexOf('</r>') + 4;
+  if (xmlStart === -1) throw new Error('분석 결과를 찾을 수 없어요. 다시 시도해주세요.');
+  const xmlStr = textContent.slice(xmlStart, xmlEnd);
 
-  let jsonStr = textContent.slice(start, end + 1);
-  jsonStr = jsonStr.replace(/[\r\n\t]/g, ' ').replace(/[\x00-\x1F\x7F]/g, ' ');
-
-  try {
-    return JSON.parse(jsonStr);
-  } catch (e) {
-    try {
-      const fixed = jsonStr.replace(/:(\s*)"((?:[^"\\]|\\.)*)"/g, (m, sp, v) => {
-        return `:${sp}"${v.replace(/(?<!\\)"/g, '\u0022')}"`;
-      });
-      return JSON.parse(fixed);
-    } catch (e2) {
-      const lastTry = jsonStr.replace(/:\s*"([^"]*)"/g, (m, v) => {
-        return `: "${v.replace(/['"]/g, '')}"`;
-      });
-      return JSON.parse(lastTry);
-    }
-  }
+  const getTag = (tag) => {
+    const m = xmlStr.match(new RegExp('<' + tag + '>([\s\S]*?)<\/' + tag + '>'));
+    return m ? m[1].trim() : '';
+  };
+  const getAllTags = (tag) => {
+    const re = new RegExp('<' + tag + '>([\s\S]*?)<\/' + tag + '>', 'g');
+    const results = []; let m;
+    while ((m = re.exec(xmlStr)) !== null) results.push(m[1].trim());
+    return results;
+  };
+  const factors = getAllTags('factor').map(f => {
+    const fg = (t) => { const m = f.match(new RegExp('<' + t + '>([\s\S]*?)<\/' + t + '>')); return m ? m[1].trim() : ''; };
+    return { category: fg('category'), color: fg('color'), text: fg('text'), detail: fg('detail') };
+  });
+  return {
+    summary: getTag('summary'),
+    factors,
+    signals: { shortRisk: parseInt(getTag('shortRisk'))||50, momentum: parseInt(getTag('momentum'))||50, fundamental: parseInt(getTag('fundamental'))||50 },
+    watchPoints: getAllTags('point'),
+    levelSimple: getTag('levelSimple')
+  };
 }
 
 function renderAnalysis(stock, data) {
