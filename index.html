@@ -1012,15 +1012,12 @@ async function selectStock(name, code, abbr, color, textColor='#fff') {
 
   renderStockCard(stock);
 
-  // 현재가 조회 + AI 분석 병렬 실행
-  const [quote] = await Promise.all([
-    fetchStockPrice(base.name, base.code),
-    loadAnalysis(stock)
-  ]);
-
-  // 현재가 업데이트
+  // 종가 먼저 조회 → AI 분석에 종가 데이터 전달
+  const quote = await fetchStockPrice(base.name, base.code);
   stock = { ...base, ...quote };
   selectedStock = stock;
+
+  // 현재가 UI 먼저 업데이트
   const priceEl = document.querySelector('.stock-price');
   const changeEl = document.getElementById('periodChangeLabel');
   if (priceEl) {
@@ -1032,6 +1029,9 @@ async function selectStock(name, code, abbr, color, textColor='#fff') {
     changeEl.className = 'stock-change ' + (stock.up ? 'up' : 'down');
   }
   updateChart(stock.up);
+
+  // 종가 데이터 포함해서 AI 분석 실행
+  loadAnalysis(stock);
 }
 
 function updateChart(isUp) {
@@ -1209,7 +1209,11 @@ async function loadAnalysis(stock) {
 async function callClaudeAPI(stock) {
   if (!apiKey) throw new Error('API Key가 없어요. 상단에서 입력해주세요.');
 
-  const prompt = `당신은 주식 분석 전문가입니다. ${stock.name}(${stock.code})의 최근 주가 변동을 분석해주세요.
+  const today = new Date().toLocaleDateString('ko-KR', {year:'numeric', month:'long', day:'numeric'});
+  const priceInfo = stock.price && stock.price !== '--'
+    ? `오늘은 ${today}입니다. ${stock.name}(${stock.code})은 오늘 ${stock.price}으로 ${stock.change} (${stock.up ? '상승' : '하락'}) 마감했습니다. 오늘 하루 장중 어떤 일이 있었는지 뉴스와 시장 동향을 웹서치로 검색해서, 장중 흐름과 주요 원인을 분석해주세요.`
+    : `오늘은 ${today}입니다. ${stock.name}(${stock.code})의 오늘 주가 변동 원인을 뉴스와 시장 동향을 검색해서 분석해주세요.`;
+  const prompt = `당신은 주식 분석 전문가입니다. ${priceInfo}
 
 반드시 아래 규칙을 지켜서 JSON만 반환하세요:
 - JSON 외 다른 텍스트 절대 금지 (마크다운 코드블록도 금지)
