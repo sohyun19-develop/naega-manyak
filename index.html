@@ -6,7 +6,7 @@
 <title>내가 만약</title>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
- 
+
   :root {
     --bg: #F2F4F6;
     --surface: #FFFFFF;
@@ -926,42 +926,20 @@ const STOCKS = [
   { name: '포스코홀딩스', code: '005490', abbr: 'PSC', color: '#003087', ys: '005490.KS' },
 ];
 
-// Claude API 웹서치로 현재가 + 차트 데이터 한번에 가져오기
+// 네이버 파이낸스 실시간 종가 (Vercel API)
 async function fetchStockPrice(stockName, stockCode) {
-  if (!apiKey) return { price: '--', change: '--', up: true, chartPrices: null };
   try {
-    const pricePrompt = `${stockName}(${stockCode}) 한국 주식 오늘 현재가와 전일 대비 등락률을 검색해서 알려주세요. 반드시 JSON만 반환하세요(다른 텍스트 없이): {"price":"숫자만예170500","changePct":"등락률소수점2자리예1.23또는-0.45"}`;
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true'
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 200,
-        tools: [{ type: 'web_search_20250305', name: 'web_search' }],
-        messages: [{ role: 'user', content: pricePrompt }]
-      })
-    });
+    const res = await fetch(`/api/stock?code=${stockCode}`);
+    if (!res.ok) throw new Error('API 오류');
     const data = await res.json();
-    const text = data.content.filter(c => c.type === 'text').map(c => c.text).join('');
-    const s = text.indexOf('{'), e = text.lastIndexOf('}');
-    if (s === -1 || e === -1) throw new Error('no json');
-    let jsonStr = text.slice(s, e+1).replace(/[\r\n\t]/g, ' ');
-    const parsed = JSON.parse(jsonStr);
-    const priceNum = parseFloat(String(parsed.price).replace(/[^0-9.]/g, ''));
-    const pct = parseFloat(parsed.changePct);
-    const up = pct >= 0;
+    const up = parseFloat(data.changePct) >= 0;
     return {
-      price: priceNum.toLocaleString('ko-KR') + '원',
-      change: (up ? '+' : '') + pct.toFixed(2) + '%',
+      price: data.price.toLocaleString('ko-KR') + '원',
+      change: (up ? '+' : '') + data.changePct + '%',
       up
     };
   } catch(e) {
-    return { price: '--', change: '--', up: true, chartPrices: null };
+    return { price: '--', change: '--', up: true };
   }
 }
 
