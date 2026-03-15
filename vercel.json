@@ -1,0 +1,9 @@
+{
+  "rewrites": [
+    { "source": "/", "destination": "/index.html" }
+  ],
+  "crons": [{
+    "path": "/api/cron/generate",
+    "schedule": "0 7 * * 1-5"
+  }]
+}
