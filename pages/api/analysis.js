@@ -31,7 +31,7 @@ export default async function handler(req, res) {
     // 1. 캐시 확인
     const cached = await redis.get(cacheKey);
     if (cached) {
-      return res.status(200).json({ ...cached, source: 'cache' });
+      return res.status(200).json({ ...cached, source: 'cache', _cacheKey: cacheKey });
     }
 
     // 2. 캐시 미스 — 장 마감 후면 on-demand 생성
@@ -67,6 +67,6 @@ export default async function handler(req, res) {
     });
 
   } catch (e) {
-    return res.status(500).json({ error: e.message });
+    return res.status(500).json({ error: e.message, _debug: 'outer-catch', _cacheKey: cacheKey });
   }
 }
