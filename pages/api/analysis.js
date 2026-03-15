@@ -5,10 +5,14 @@ import { generateAnalysis } from '../../lib/generate-analysis';
 const STOCKS = [
   { code: '005930', name: '삼성전자' },
   { code: '000660', name: 'SK하이닉스' },
-  { code: '005380', name: '현대차' },
+  { code: '005380', name: '현대자동차' },
   { code: '035420', name: 'NAVER' },
   { code: '035720', name: '카카오' },
   { code: '373220', name: 'LG에너지솔루션' },
+  { code: '207940', name: '삼성바이오로직스' },
+  { code: '068270', name: '셀트리온' },
+  { code: '105560', name: 'KB금융' },
+  { code: '005490', name: '포스코홀딩스' },
 ];
 
 export default async function handler(req, res) {
